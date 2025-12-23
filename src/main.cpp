@@ -15,22 +15,8 @@ void framebufferSizeCallback(GLFWwindow *window, int width, int height);
 void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods);
 void processInput(GLFWwindow *window);
 void updateCamera();
-void applyOrbitDelta(float yawDelta, float pitchDelta, float radiusDelta);
+//void applyOrbitDelta(float yawDelta, float pitchDelta, float radiusDelta);
 unsigned int loadCubemap(std::vector<std::string> &mFileName);
-
-struct material_t{
-    glm::vec3 ambient;
-    glm::vec3 diffuse;
-    glm::vec3 specular;
-    float gloss;
-};
-
-struct light_t{
-    glm::vec3 position;
-    glm::vec3 ambient;
-    glm::vec3 diffuse;
-    glm::vec3 specular;
-};
 
 struct camera_t{
     glm::vec3 position;
@@ -43,14 +29,11 @@ struct camera_t{
     float yaw;
     float pitch;
     float radius;
-    float minRadius;
-    float maxRadius;
-    float orbitRotateSpeed;
-    float orbitZoomSpeed;
-    float minOrbitPitch;
-    float maxOrbitPitch;
-    bool enableAutoOrbit;
-    float autoOrbitSpeed;
+};
+
+struct light_t{
+    glm::vec3 position;
+    glm::vec3 color;
 };
 
 // settings
@@ -67,12 +50,9 @@ std::vector<shader_program_t*> shaderPrograms;
 shader_program_t* cubemapShader;
 
 light_t light;
-material_t material;
 camera_t camera;
 
-Object* staticModel = nullptr;
-Object* cubeModel = nullptr;
-bool isCube = false;
+Object* dogModel = nullptr;
 glm::mat4 modelMatrix(1.0f);
 
 float currentTime = 0.0f;
@@ -81,18 +61,15 @@ float lastFrame = 0.0f;
 
 void model_setup(){
 #if defined(__linux__) || defined(__APPLE__)
-    std::string obj_path = "..\\..\\src\\asset\\obj\\Mei_Run.obj";
-    std::string cube_obj_path = "..\\..\\src\\asset\\obj\\cube.obj";
-    std::string texture_path = "..\\..\\src\\asset\\texture\\Mei_TEX.png";
+    std::string obj_path = "..\\..\\src\\asset\\model\\dog.obj";
+    std::string texture_path = "..\\..\\src\\asset\\model\\default_baseColor.png";
 #else
-    std::string obj_path = "..\\..\\src\\asset\\obj\\Mei_Run.obj";
-    std::string texture_path = "..\\..\\src\\asset\\texture\\Mei_TEX.png";
-    std::string cube_obj_path = "..\\..\\src\\asset\\obj\\cube.obj";
+    std::string obj_path = "..\\..\\src\\asset\\model\\dog.obj";
+    std::string texture_path = "..\\..\\src\\asset\\model\\default_baseColor.png";
 #endif
 
-    staticModel = new Object(obj_path);
-    staticModel->loadTexture(texture_path);
-    cubeModel = new Object(cube_obj_path);
+    dogModel = new Object(obj_path);
+    dogModel->loadTexture(texture_path);
 
     modelMatrix = glm::mat4(1.0f);
     modelMatrix = glm::scale(modelMatrix, glm::vec3(100.0f));
@@ -103,15 +80,7 @@ void camera_setup(){
     camera.yaw = 90.0f;
     camera.pitch = 10.0f;
     camera.radius = 400.0f;
-    camera.minRadius = 150.0f;
-    camera.maxRadius = 800.0f;
-    camera.orbitRotateSpeed = 60.0f;
-    camera.orbitZoomSpeed = 400.0f;
-    camera.minOrbitPitch = -80.0f;
-    camera.maxOrbitPitch = 80.0f;
     camera.target = glm::vec3(0.0f);
-    camera.enableAutoOrbit = true;
-    camera.autoOrbitSpeed = 20.0f;
 
     updateCamera();
 }
@@ -130,25 +99,9 @@ void updateCamera(){
     camera.up = glm::normalize(glm::cross(camera.right, camera.front));
 }
 
-void applyOrbitDelta(float yawDelta, float pitchDelta, float radiusDelta) {
-    camera.yaw += yawDelta;
-    camera.pitch = glm::clamp(camera.pitch + pitchDelta, camera.minOrbitPitch, camera.maxOrbitPitch);
-    camera.radius = glm::clamp(camera.radius + radiusDelta, camera.minRadius, camera.maxRadius);
-    updateCamera();
-}
-
 void light_setup(){
-    light.position = glm::vec3(1000.0, 1000.0, 0.0);
-    light.ambient = glm::vec3(1.0);
-    light.diffuse = glm::vec3(1.0);
-    light.specular = glm::vec3(1.0);
-}
-
-void material_setup(){
-    material.ambient = glm::vec3(0.5);
-    material.diffuse = glm::vec3(1.0);
-    material.specular = glm::vec3(0.7);
-    material.gloss = 50.0;
+    light.position = glm::vec3(3.0f, 5.0f, 3.0f);
+    light.color = glm::vec3(1.0);
 }
 
 void shader_setup(){
@@ -159,17 +112,30 @@ void shader_setup(){
 #endif
 
     std::vector<std::string> shadingMethod = {
-        "default", "bling-phong", "gouraud", "metallic", "glass_schlick"
+        "basic", 
+        "bubble", 
+        "water", 
+        "fur"
     };
 
     for(int i=0; i<shadingMethod.size(); i++){
         std::string vpath = shaderDir + shadingMethod[i] + ".vert";
         std::string fpath = shaderDir + shadingMethod[i] + ".frag";
+        std::string gpath = shaderDir + shadingMethod[i] + ".geom";
 
         shader_program_t* shaderProgram = new shader_program_t();
         shaderProgram->create();
-        shaderProgram->add_shader(vpath, GL_VERTEX_SHADER);
-        shaderProgram->add_shader(fpath, GL_FRAGMENT_SHADER);
+        if (i == 0) //basic
+        {
+            shaderProgram->add_shader(vpath, GL_VERTEX_SHADER);
+            shaderProgram->add_shader(fpath, GL_FRAGMENT_SHADER);
+        }
+        else
+        {
+            shaderProgram->add_shader(vpath, GL_VERTEX_SHADER);
+            shaderProgram->add_shader(gpath, GL_GEOMETRY_SHADER);
+            shaderProgram->add_shader(fpath, GL_FRAGMENT_SHADER);
+        }
         shaderProgram->link_shader();
         shaderPrograms.push_back(shaderProgram);
     }
@@ -220,7 +186,6 @@ void setup(){
     shader_setup();
     camera_setup();
     cubemap_setup();
-    material_setup();
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
@@ -233,18 +198,13 @@ void update(){
     currentTime = glfwGetTime();
     deltaTime = currentTime - lastFrame;
     lastFrame = currentTime;
-
-    if (camera.enableAutoOrbit) {
-        float yawDelta = camera.autoOrbitSpeed * deltaTime;
-        applyOrbitDelta(yawDelta, 0.0f, 0.0f);
-    }
 }
 
 void render(){
     glClearColor(0.0, 0.0, 0.0, 1.0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    glm::mat4 view = glm::lookAt(camera.position - glm::vec3(0.0f, 0.2f, 0.1f), camera.position + camera.front, camera.up);
+    glm::mat4 view = glm::lookAt(camera.position, camera.target, camera.up);
     glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 1000.0f);
 
     // set matrix for view, projection, model transformation
@@ -256,55 +216,15 @@ void render(){
 
     // TODO: set additional uniform value for shader program
     shaderPrograms[shaderProgramIndex]->set_uniform_value("light.position", light.position);
-    shaderPrograms[shaderProgramIndex]->set_uniform_value("light.ambient", light.ambient);
-    shaderPrograms[shaderProgramIndex]->set_uniform_value("light.diffuse", light.diffuse);
-    shaderPrograms[shaderProgramIndex]->set_uniform_value("light.specular", light.specular);
+    shaderPrograms[shaderProgramIndex]->set_uniform_value("light.color", light.color);
 
-    shaderPrograms[shaderProgramIndex]->set_uniform_value("material.gloss", material.gloss);
-    shaderPrograms[shaderProgramIndex]->set_uniform_value("material.ambient", material.ambient);
-    shaderPrograms[shaderProgramIndex]->set_uniform_value("material.diffuse", material.diffuse);
-    shaderPrograms[shaderProgramIndex]->set_uniform_value("material.specular", material.specular);
-
-    shaderPrograms[shaderProgramIndex]->set_uniform_value("ourTexture", 0);
-    if (shaderProgramIndex == 3)
-    {
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
-        shaderPrograms[3]->set_uniform_value("alpha", 0.4f);
-        shaderPrograms[3]->set_uniform_value("bias", 0.2f);
-        shaderPrograms[3]->set_uniform_value("skybox", 0);
-    }
-    
-    if (shaderProgramIndex == 4)
-    {
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
-        shaderPrograms[4]->set_uniform_value("AIR_coeff", 1.0f);
-        shaderPrograms[4]->set_uniform_value("GLASS_coeff", 1.52f);
-        shaderPrograms[4]->set_uniform_value("skybox", 0);
-    }
-     
-    // specifying sampler for shader program
-
-    if(isCube)
-        cubeModel->draw();
-    else
-        staticModel->draw();
-
+    dogModel->draw();
     shaderPrograms[shaderProgramIndex]->release();
-
-    // TODO 
-    // Rendering cubemap environment
-    // Hint:
-    // 1. All the needed things are already set up in cubemap_setup() function.
-    // 2. You can use the vertices in cubemapVertices provided in the header/cube.h
-    // 3. You can use the cubemapShader to render the cubemap 
-    //    (refer to the above code to get an idea of how to use the shader program)
 
     cubemapShader->use();
     cubemapShader->set_uniform_value("view", view);
     cubemapShader->set_uniform_value("projection", projection);
-
+   
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
     cubemapShader->set_uniform_value("skybox", 0);
@@ -324,7 +244,7 @@ int main() {
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
 
-    GLFWwindow *window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "HW3-Static Model", NULL, NULL);
+    GLFWwindow *window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "ICG Final Project", NULL, NULL);
     if (window == NULL) {
         std::cerr << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
@@ -347,14 +267,13 @@ int main() {
     
     while (!glfwWindowShouldClose(window)) {
         processInput(window);
-        update(); 
+        update();
         render(); 
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
-    delete staticModel;
-    delete cubeModel;
+    delete dogModel;
     for (auto shader : shaderPrograms) {
         delete shader;
     }
@@ -367,55 +286,17 @@ int main() {
 void processInput(GLFWwindow *window) {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
-
-    glm::vec2 orbitInput(0.0f);
-    float zoomInput = 0.0f;
-
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        orbitInput.x += 1.0f;
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        orbitInput.x -= 1.0f;
-    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
-        orbitInput.y += 1.0f;
-    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
-        orbitInput.y -= 1.0f;
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        zoomInput -= 1.0f;
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        zoomInput += 1.0f;
-
-    if (orbitInput.x != 0.0f || orbitInput.y != 0.0f || zoomInput != 0.0f) {
-        float yawDelta = orbitInput.x * camera.orbitRotateSpeed * deltaTime;
-        float pitchDelta = orbitInput.y * camera.orbitRotateSpeed * deltaTime;
-        float radiusDelta = zoomInput * camera.orbitZoomSpeed * deltaTime;
-        applyOrbitDelta(yawDelta, pitchDelta, radiusDelta);
-    }
 }
 
 void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods) {
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, true);
-
-    if (key == GLFW_KEY_0 && (action == GLFW_REPEAT || action == GLFW_PRESS)) 
-        shaderProgramIndex = 0;
-    if (key == GLFW_KEY_1 && (action == GLFW_REPEAT || action == GLFW_PRESS)) 
-        shaderProgramIndex = 1;
-    if (key == GLFW_KEY_2 && (action == GLFW_REPEAT || action == GLFW_PRESS)) 
-        shaderProgramIndex = 2;
+    if (key == GLFW_KEY_1 && action == GLFW_PRESS) 
+        shaderProgramIndex = 0; //basic
+    if (key == GLFW_KEY_2 && action == GLFW_PRESS) 
+        shaderProgramIndex = 1; //bubble
     if (key == GLFW_KEY_3 && action == GLFW_PRESS)
-        shaderProgramIndex = 3;
+        shaderProgramIndex = 2; //water
     if (key == GLFW_KEY_4 && action == GLFW_PRESS)
-        shaderProgramIndex = 4;
-    if (key == GLFW_KEY_5 && action == GLFW_PRESS)
-        shaderProgramIndex = 5;
-    if (key == GLFW_KEY_6 && action == GLFW_PRESS)
-        shaderProgramIndex = 6;
-    if (key == GLFW_KEY_7 && action == GLFW_PRESS)
-        shaderProgramIndex = 7;
-    if (key == GLFW_KEY_8 && action == GLFW_PRESS)
-        shaderProgramIndex = 8;
-    if( key == GLFW_KEY_9 && action == GLFW_PRESS)
-        isCube = !isCube;
+        shaderProgramIndex = 3; //fur
 }
 
 void framebufferSizeCallback(GLFWwindow *window, int width, int height) {
