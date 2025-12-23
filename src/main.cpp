@@ -15,7 +15,7 @@ void framebufferSizeCallback(GLFWwindow *window, int width, int height);
 void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods);
 void processInput(GLFWwindow *window);
 void updateCamera();
-//void applyOrbitDelta(float yawDelta, float pitchDelta, float radiusDelta);
+void applyOrbitDelta(float yawDelta, float pitchDelta, float radiusDelta);
 unsigned int loadCubemap(std::vector<std::string> &mFileName);
 
 struct camera_t{
@@ -29,6 +29,14 @@ struct camera_t{
     float yaw;
     float pitch;
     float radius;
+    float minRadius;
+    float maxRadius;
+    float orbitRotateSpeed;
+    float orbitZoomSpeed;
+    float minOrbitPitch;
+    float maxOrbitPitch;
+    bool enableAutoOrbit;
+    float autoOrbitSpeed;
 };
 
 struct light_t{
@@ -80,7 +88,15 @@ void camera_setup(){
     camera.yaw = 90.0f;
     camera.pitch = 10.0f;
     camera.radius = 400.0f;
+    camera.minRadius = 150.0f;
+    camera.maxRadius = 800.0f;
+    camera.orbitRotateSpeed = 60.0f;
+    camera.orbitZoomSpeed = 400.0f;
+    camera.minOrbitPitch = -80.0f;
+    camera.maxOrbitPitch = 80.0f;
     camera.target = glm::vec3(0.0f);
+    camera.enableAutoOrbit = false;
+    camera.autoOrbitSpeed = 20.0f;
 
     updateCamera();
 }
@@ -97,6 +113,13 @@ void updateCamera(){
     camera.front = glm::normalize(camera.target - camera.position);
     camera.right = glm::normalize(glm::cross(camera.front, camera.worldUp));
     camera.up = glm::normalize(glm::cross(camera.right, camera.front));
+}
+
+void applyOrbitDelta(float yawDelta, float pitchDelta, float radiusDelta) {
+    camera.yaw += yawDelta;
+    camera.pitch = glm::clamp(camera.pitch + pitchDelta, camera.minOrbitPitch, camera.maxOrbitPitch);
+    camera.radius = glm::clamp(camera.radius + radiusDelta, camera.minRadius, camera.maxRadius);
+    updateCamera();
 }
 
 void light_setup(){
@@ -286,6 +309,29 @@ int main() {
 void processInput(GLFWwindow *window) {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
+    
+    glm::vec2 orbitInput(0.0f);
+    float zoomInput = 0.0f;
+
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        orbitInput.x += 1.0f;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        orbitInput.x -= 1.0f;
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+        orbitInput.y += 1.0f;
+    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
+        orbitInput.y -= 1.0f;
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        zoomInput -= 1.0f;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        zoomInput += 1.0f;
+
+    if (orbitInput.x != 0.0f || orbitInput.y != 0.0f || zoomInput != 0.0f) {
+        float yawDelta = orbitInput.x * camera.orbitRotateSpeed * deltaTime;
+        float pitchDelta = orbitInput.y * camera.orbitRotateSpeed * deltaTime;
+        float radiusDelta = zoomInput * camera.orbitZoomSpeed * deltaTime;
+        applyOrbitDelta(yawDelta, pitchDelta, radiusDelta);
+    }
 }
 
 void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods) {
