@@ -36,7 +36,6 @@ struct camera_t{
     float minOrbitPitch;
     float maxOrbitPitch;
     bool enableAutoOrbit;
-    float autoOrbitSpeed;
 };
 
 struct light_t{
@@ -96,7 +95,6 @@ void camera_setup(){
     camera.maxOrbitPitch = 80.0f;
     camera.target = glm::vec3(0.0f);
     camera.enableAutoOrbit = false;
-    camera.autoOrbitSpeed = 20.0f;
 
     updateCamera();
 }
