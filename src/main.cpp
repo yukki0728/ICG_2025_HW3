@@ -16,7 +16,7 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
 void processInput(GLFWwindow *window);
 void updateCamera();
 void applyOrbitDelta(float yawDelta, float pitchDelta, float radiusDelta);
-unsigned int loadCubemap(std::vector<std::string> &mFileName);
+unsigned int loadHDRTexture(const std::string &path);
 
 struct camera_t{
     glm::vec3 position;
@@ -48,13 +48,13 @@ int SCR_WIDTH = 800;
 int SCR_HEIGHT = 600;
 
 // cube map 
-unsigned int cubemapTexture;
-unsigned int cubemapVAO, cubemapVBO;
+unsigned int envVAO, envVBO;
+unsigned int envTexture;
 
 // shader programs 
 int shaderProgramIndex = 0;
 std::vector<shader_program_t*> shaderPrograms;
-shader_program_t* cubemapShader;
+shader_program_t* envShader;
 
 light_t light;
 camera_t camera;
@@ -62,7 +62,10 @@ camera_t camera;
 //model
 Object* dogModel = nullptr;
 Object* soapModel = nullptr;
-glm::mat4 modelMatrix(1.0f);
+
+//dog
+float dogRotationY = 0.0f;
+glm::vec3 dogPosition = glm::vec3(0.0f);
 
 float currentTime = 0.0f;
 float deltaTime = 0.0f;
@@ -73,14 +76,16 @@ bool SoapShow = false;
 float SoapStartTime = 0.0f;
 float SoapShowTime = 2.5f;
 
+//bubble
+float BubbleAmount = 0.0f;
+float BubbleGrowSpeed = 0.5f;
+
 void model_setup(){
     dogModel = new Object("..\\..\\src\\asset\\model\\dog.obj");
-    dogModel->loadTexture("..\\..\\src\\asset\\model\\default_baseColor.png");
+    dogModel->loadTexture("..\\..\\src\\asset\\model\\dog_texture.png");
 
     soapModel = new Object("..\\..\\src\\asset\\model\\soap.obj");
-
-    modelMatrix = glm::mat4(1.0f);
-    modelMatrix = glm::scale(modelMatrix, glm::vec3(100.0f));
+    soapModel->loadTexture("..\\..\\src\\asset\\model\\soap_texture.png");
 }
 
 void camera_setup(){
@@ -163,39 +168,22 @@ void shader_setup(){
     }
 }
 
-void cubemap_setup(){
-#if defined(__linux__) || defined(__APPLE__)
-    std::string cubemapDir = "..\\..\\src\\asset\\texture\\skybox\\";
+void env_setup(){  
+    envTexture = loadHDRTexture("..\\..\\src\\asset\\background\\modern_bathroom.hdr");
     std::string shaderDir = "..\\..\\src\\shaders\\";
-#else
-    std::string cubemapDir = "..\\..\\src\\asset\\texture\\skybox\\";
-    std::string shaderDir = "..\\..\\src\\shaders\\";
-#endif
-
-    std::vector<std::string> faces
-    {
-        cubemapDir + "right.jpg",
-        cubemapDir + "left.jpg",
-        cubemapDir + "top.jpg",
-        cubemapDir + "bottom.jpg",
-        cubemapDir + "front.jpg",
-        cubemapDir + "back.jpg"
-    };
-    cubemapTexture = loadCubemap(faces);   
-
-    std::string vpath = shaderDir + "cubemap.vert";
-    std::string fpath = shaderDir + "cubemap.frag";
+    std::string vpath = shaderDir + "env.vert";
+    std::string fpath = shaderDir + "env.frag";
     
-    cubemapShader = new shader_program_t();
-    cubemapShader->create();
-    cubemapShader->add_shader(vpath, GL_VERTEX_SHADER);
-    cubemapShader->add_shader(fpath, GL_FRAGMENT_SHADER);
-    cubemapShader->link_shader();
+    envShader = new shader_program_t();
+    envShader->create();
+    envShader->add_shader(vpath, GL_VERTEX_SHADER);
+    envShader->add_shader(fpath, GL_FRAGMENT_SHADER);
+    envShader->link_shader();
 
-    glGenVertexArrays(1, &cubemapVAO);
-    glGenBuffers(1, &cubemapVBO);
-    glBindVertexArray(cubemapVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, cubemapVBO);
+    glGenVertexArrays(1, &envVAO);
+    glGenBuffers(1, &envVBO);
+    glBindVertexArray(envVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, envVBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(cubemapVertices), &cubemapVertices, GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
@@ -207,7 +195,7 @@ void setup(){
     model_setup();
     shader_setup();
     camera_setup();
-    cubemap_setup();
+    env_setup();
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
@@ -223,10 +211,9 @@ void update(){
 
     if (SoapShow)
     {
-        if (currentTime - SoapStartTime > SoapShowTime)
-        {
-            SoapShow = false;
-        }
+        BubbleAmount += BubbleGrowSpeed * BubbleGrowSpeed;
+        BubbleAmount = glm::clamp(BubbleAmount, 0.0f, 1.0f);
+        if (currentTime - SoapStartTime > SoapShowTime) SoapShow = false;
     }
 }
 
@@ -235,11 +222,16 @@ void render(){
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glm::mat4 view = glm::lookAt(camera.position, camera.target, camera.up);
-    glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 1000.0f);
+    glm::mat4 projection = glm::perspective(glm::radians(75.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 1000.0f);
+
+    glm::mat4 model = glm::mat4(1.0f);
+    model = glm::translate(model, dogPosition);
+    model = glm::rotate(model, glm::radians(dogRotationY), glm::vec3(0.0f, 1.0f, 0.0f));
+    model = glm::scale(model, glm::vec3(100.0f));
 
     // set matrix for view, projection, model transformation
     shaderPrograms[shaderProgramIndex]->use();
-    shaderPrograms[shaderProgramIndex]->set_uniform_value("model", modelMatrix);
+    shaderPrograms[shaderProgramIndex]->set_uniform_value("model", model);
     shaderPrograms[shaderProgramIndex]->set_uniform_value("view", view);
     shaderPrograms[shaderProgramIndex]->set_uniform_value("projection", projection);
     shaderPrograms[shaderProgramIndex]->set_uniform_value("viewPos", camera.position - glm::vec3(0.0f, 0.2f, 0.1f));
@@ -248,20 +240,49 @@ void render(){
     shaderPrograms[shaderProgramIndex]->set_uniform_value("light.position", light.position);
     shaderPrograms[shaderProgramIndex]->set_uniform_value("light.color", light.color);
 
+    if (shaderProgramIndex == 1) shaderPrograms[1]->set_uniform_value("BubbleAmount", BubbleAmount);
+
     dogModel->draw();
     shaderPrograms[shaderProgramIndex]->release();
 
-    cubemapShader->use();
-    cubemapShader->set_uniform_value("view", view);
-    cubemapShader->set_uniform_value("projection", projection);
+    if (SoapShow)
+    {
+        glm::mat4 soapModelMatrix = glm::mat4(1.0f);
+
+        float t = currentTime - SoapStartTime;
+        float offsetX = sin(t * 6.0f) * 10.0f;
+        float offsetY = sin(t * 6.0f) * 5.0f;
+
+        soapModelMatrix = glm::translate(soapModelMatrix, glm::vec3(offsetX - 60.0f, offsetY - 25.0f, 0.0f));
+        soapModelMatrix = glm::scale(soapModelMatrix, glm::vec3(0.75f));
+        soapModelMatrix = glm::rotate(soapModelMatrix, glm::radians(17.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+
+        shaderPrograms[0]->use();
+        shaderPrograms[0]->set_uniform_value("model", soapModelMatrix);
+        shaderPrograms[0]->set_uniform_value("view", view);
+        shaderPrograms[0]->set_uniform_value("projection", projection);
+
+        soapModel->draw();
+        shaderPrograms[0]->release();
+    }
+
+    glDepthFunc(GL_LEQUAL);
+    glDepthMask(GL_FALSE);
+    
+    envShader->use();
+    envShader->set_uniform_value("view", view);
+    envShader->set_uniform_value("projection", projection);
    
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
-    cubemapShader->set_uniform_value("skybox", 0);
+    glBindTexture(GL_TEXTURE_2D, envTexture);
+    envShader->set_uniform_value("equirectangularMap", 0);
 
-    glBindVertexArray(cubemapVAO);
+    glBindVertexArray(envVAO);
     glDrawArrays(GL_TRIANGLES, 0, 36);
     glBindVertexArray(0);
+
+    glDepthMask(GL_TRUE);
+    glDepthFunc(GL_LESS);
 }
 
 int main() {
@@ -307,7 +328,7 @@ int main() {
     for (auto shader : shaderPrograms) {
         delete shader;
     }
-    delete cubemapShader;
+    delete envShader;
 
     glfwTerminate();
     return 0;
@@ -339,6 +360,28 @@ void processInput(GLFWwindow *window) {
         float radiusDelta = zoomInput * camera.orbitZoomSpeed * deltaTime;
         applyOrbitDelta(yawDelta, pitchDelta, radiusDelta);
     }
+
+    float moveSpeed = 30.0f; 
+    if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+        dogPosition.y += moveSpeed * deltaTime; 
+    if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+        dogPosition.y -= moveSpeed * deltaTime;  
+    if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
+        dogPosition.x -= moveSpeed * deltaTime;   
+    if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
+        dogPosition.x += moveSpeed * deltaTime;  
+    if (glfwGetKey(window, GLFW_KEY_I) == GLFW_PRESS)
+        dogPosition.z -= moveSpeed * deltaTime;  
+    if (glfwGetKey(window, GLFW_KEY_K) == GLFW_PRESS)
+        dogPosition.z += moveSpeed * deltaTime;
+
+    float rotationSpeed = 30.0f; 
+    if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
+        dogRotationY -= rotationSpeed * deltaTime;
+    }
+    if (glfwGetKey(window, GLFW_KEY_L) == GLFW_PRESS) {
+        dogRotationY += rotationSpeed * deltaTime;
+    }
 }
 
 void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods) {
@@ -362,35 +405,28 @@ void framebufferSizeCallback(GLFWwindow *window, int width, int height) {
     SCR_HEIGHT = height;
 }
 
-unsigned int loadCubemap(vector<std::string>& faces)
+unsigned int loadHDRTexture(const std::string &path)
 {
-    unsigned int texture;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_CUBE_MAP, texture);
-
-    int width, height, nrChannels;
-    for (unsigned int i = 0; i < faces.size(); i++)
+    stbi_set_flip_vertically_on_load(true);
+    int width, height, nrComponents;
+    float* data = stbi_loadf(path.c_str(), &width, &height, &nrComponents, 0);
+    if (data)
     {
-        stbi_set_flip_vertically_on_load(false);
-        unsigned char *data = stbi_load(faces[i].c_str(), &width, &height, &nrChannels, 0);
-        if (data)
-        {
-            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 
-                         0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data
-            );
-            stbi_image_free(data);
-        }
-        else
-        {
-            std::cout << "Cubemap tex failed to load at path: " << faces[i] << std::endl;
-            stbi_image_free(data);
-        }
+        unsigned int hdrTex;
+        glGenTextures(1, &hdrTex);
+        glBindTexture(GL_TEXTURE_2D, hdrTex);
+        GLenum format = (nrComponents == 3) ? GL_RGB : GL_RGBA;
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, width, height, 0, format, GL_FLOAT, data);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        stbi_image_free(data);
+        return hdrTex;
     }
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-
-    return texture;
-}  
+    else
+    {
+        std::cout << "Failed to load HDR image: " << path << std::endl;
+        return 0;
+    }
+}
