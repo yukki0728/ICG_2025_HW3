@@ -59,24 +59,25 @@ shader_program_t* cubemapShader;
 light_t light;
 camera_t camera;
 
+//model
 Object* dogModel = nullptr;
+Object* soapModel = nullptr;
 glm::mat4 modelMatrix(1.0f);
 
 float currentTime = 0.0f;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-void model_setup(){
-#if defined(__linux__) || defined(__APPLE__)
-    std::string obj_path = "..\\..\\src\\asset\\model\\dog.obj";
-    std::string texture_path = "..\\..\\src\\asset\\model\\default_baseColor.png";
-#else
-    std::string obj_path = "..\\..\\src\\asset\\model\\dog.obj";
-    std::string texture_path = "..\\..\\src\\asset\\model\\default_baseColor.png";
-#endif
+//soap
+bool SoapShow = false;
+float SoapStartTime = 0.0f;
+float SoapShowTime = 2.5f;
 
-    dogModel = new Object(obj_path);
-    dogModel->loadTexture(texture_path);
+void model_setup(){
+    dogModel = new Object("..\\..\\src\\asset\\model\\dog.obj");
+    dogModel->loadTexture("..\\..\\src\\asset\\model\\default_baseColor.png");
+
+    soapModel = new Object("..\\..\\src\\asset\\model\\soap.obj");
 
     modelMatrix = glm::mat4(1.0f);
     modelMatrix = glm::scale(modelMatrix, glm::vec3(100.0f));
@@ -219,6 +220,14 @@ void update(){
     currentTime = glfwGetTime();
     deltaTime = currentTime - lastFrame;
     lastFrame = currentTime;
+
+    if (SoapShow)
+    {
+        if (currentTime - SoapStartTime > SoapShowTime)
+        {
+            SoapShow = false;
+        }
+    }
 }
 
 void render(){
@@ -336,7 +345,11 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
     if (key == GLFW_KEY_1 && action == GLFW_PRESS) 
         shaderProgramIndex = 0; //basic
     if (key == GLFW_KEY_2 && action == GLFW_PRESS) 
+    {
         shaderProgramIndex = 1; //bubble
+        SoapShow = true;
+        SoapStartTime = glfwGetTime();
+    }
     if (key == GLFW_KEY_3 && action == GLFW_PRESS)
         shaderProgramIndex = 2; //water
     if (key == GLFW_KEY_4 && action == GLFW_PRESS)
