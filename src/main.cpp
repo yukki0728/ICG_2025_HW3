@@ -225,7 +225,7 @@ void update(){
 
     if (SoapShow)
     {
-        if (SoapShow && currentTime - SoapStartTime > 3.0f) 
+        if (SoapShow && currentTime - SoapStartTime > 1.5f) 
         {
             BubbleAmount += BubbleGrowSpeed * deltaTime;
             BubbleShow = true;
@@ -247,16 +247,16 @@ void render(){
     glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 1000.0f);
 
     //basic
-    shaderPrograms[shaderProgramIndex]->use();
-    shaderPrograms[shaderProgramIndex]->set_uniform_value("model", modelMatrix);
-    shaderPrograms[shaderProgramIndex]->set_uniform_value("view", view);
-    shaderPrograms[shaderProgramIndex]->set_uniform_value("projection", projection);
-    shaderPrograms[shaderProgramIndex]->set_uniform_value("viewPos", camera.position);
-    shaderPrograms[shaderProgramIndex]->set_uniform_value("light.position", light.position);
-    shaderPrograms[shaderProgramIndex]->set_uniform_value("light.color", light.color);
-    shaderPrograms[shaderProgramIndex]->set_uniform_value("ourTexture", 0);
+    shaderPrograms[0]->use();
+    shaderPrograms[0]->set_uniform_value("model", modelMatrix);
+    shaderPrograms[0]->set_uniform_value("view", view);
+    shaderPrograms[0]->set_uniform_value("projection", projection);
+    shaderPrograms[0]->set_uniform_value("viewPos", camera.position);
+    shaderPrograms[0]->set_uniform_value("light.position", light.position);
+    shaderPrograms[0]->set_uniform_value("light.color", light.color);
+    shaderPrograms[0]->set_uniform_value("ourTexture", 0);
     dogModel->draw();
-    shaderPrograms[shaderProgramIndex]->release();
+    shaderPrograms[0]->release();
 
     if (SoapShow)
     {
@@ -279,7 +279,7 @@ void render(){
         shaderPrograms[0]->release();
     }
 
-    if (BubbleShow)
+    if (BubbleShow && shaderProgramIndex == 1)
     {
         shaderPrograms[1]->use();
         shaderPrograms[1]->set_uniform_value("model", modelMatrix);
@@ -391,6 +391,7 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
     {
         shaderProgramIndex = 1; //bubble
         SoapShow = true;
+        BubbleShow = false;
         BubbleAmount = 0.0f;
         SoapStartTime = glfwGetTime();
     }
