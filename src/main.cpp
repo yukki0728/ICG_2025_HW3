@@ -233,7 +233,6 @@ void setup(){
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
     glEnable(GL_CULL_FACE);
-    glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glFrontFace(GL_CCW);
     glCullFace(GL_BACK);
@@ -315,8 +314,9 @@ void render(){
         shaderPrograms[0]->release();
     }
 
-    if (BubbleShow && shaderProgramIndex == 1)
+    if (BubbleShow)
     {
+        glEnable(GL_BLEND);
         shaderPrograms[1]->use();
         shaderPrograms[1]->set_uniform_value("model", modelMatrix);
         shaderPrograms[1]->set_uniform_value("view", view);
@@ -391,7 +391,11 @@ void render(){
             shaderPrograms[2]->set_uniform_value("model", waterModelMatrix);
             waterModel->draw();
         }
-        if (t > 5.0f) BubbleShow = false;
+        if (t > 5.0f)
+        {
+            BubbleShow = false;
+            glDisable(GL_BLEND);
+        }
 
         shaderPrograms[2]->release();
     }
