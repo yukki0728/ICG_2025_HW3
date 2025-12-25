@@ -62,6 +62,8 @@ camera_t camera;
 //model
 Object* dogModel = nullptr;
 Object* soapModel = nullptr;
+Object* dryerModel = nullptr;
+Object* waterModel = nullptr;
 
 float currentTime = 0.0f;
 float deltaTime = 0.0f;
@@ -77,18 +79,40 @@ bool BubbleShow = false;
 float BubbleAmount = 0.0f;
 float BubbleGrowSpeed = 0.25f;
 
+//dryer
+bool DryerShow = false;
+float DryerStartTime = 0.0f;
+float DryerShowTime = 3.5f;
+
+//water
+bool WaterShow = false;
+float WaterStartTime = 0.0f;
+float WaterShowTime = 10.0f;
+
+//fur
+float FurStrength = 0.0f;
+float minStrength = 0.0f;
+float maxStrength = 10.0f;
+float FurGrowSpeed = 2.5f;
+float FurSmallSpeed = 0.5f;
+
 void model_setup(){
     dogModel = new Object("..\\..\\src\\asset\\model\\dog.obj");
     dogModel->loadTexture("..\\..\\src\\asset\\model\\dog_texture.png");
 
     soapModel = new Object("..\\..\\src\\asset\\model\\soap.obj");
     soapModel->loadTexture("..\\..\\src\\asset\\model\\soap_texture.png");
+
+    dryerModel = new Object("..\\..\\src\\asset\\model\\dryer.obj");
+    dryerModel->loadTexture("..\\..\\src\\asset\\model\\dryer_texture.png");
+
+    waterModel = new Object("..\\..\\src\\asset\\model\\bubble.obj");
 }
 
 void camera_setup(){
     camera.worldUp = glm::vec3(0.0f, 1.0f, 0.0f);
     camera.yaw = 90.0f;
-    camera.pitch = 10.0f;
+    camera.pitch = 45.0f;
     camera.radius = 400.0f;
     camera.minRadius = 150.0f;
     camera.maxRadius = 800.0f;
@@ -149,12 +173,12 @@ void shader_setup(){
 
         shader_program_t* shaderProgram = new shader_program_t();
         shaderProgram->create();
-        if (i == 0 || i == 1) //basic
+        if (i != 3)
         {
             shaderProgram->add_shader(vpath, GL_VERTEX_SHADER);
             shaderProgram->add_shader(fpath, GL_FRAGMENT_SHADER);
         }
-        else
+        else //fur
         {
             shaderProgram->add_shader(vpath, GL_VERTEX_SHADER);
             shaderProgram->add_shader(gpath, GL_GEOMETRY_SHADER);
@@ -166,13 +190,8 @@ void shader_setup(){
 }
 
 void cubemap_setup(){
-#if defined(__linux__) || defined(__APPLE__)
-    std::string cubemapDir = "..\\..\\src\\asset\\texture\\skybox\\";
+    std::string cubemapDir = "..\\..\\src\\asset\\background\\bathroom\\";
     std::string shaderDir = "..\\..\\src\\shaders\\";
-#else
-    std::string cubemapDir = "..\\..\\src\\asset\\texture\\skybox\\";
-    std::string shaderDir = "..\\..\\src\\shaders\\";
-#endif
 
     std::vector<std::string> faces
     {
@@ -214,6 +233,8 @@ void setup(){
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
     glEnable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glFrontFace(GL_CCW);
     glCullFace(GL_BACK);
 }
@@ -232,6 +253,20 @@ void update(){
         }
         if (currentTime - SoapStartTime > SoapShowTime) SoapShow = false;
     }
+
+    if (WaterShow)
+    {
+        if (currentTime - WaterStartTime > WaterShowTime) WaterShow = false;
+    }
+
+    if (DryerShow && currentTime - DryerStartTime >= 0.5f)
+    {
+        FurStrength += FurGrowSpeed * deltaTime;
+        if (currentTime - DryerStartTime > DryerShowTime) DryerShow = false;
+    }
+    else FurStrength -= FurSmallSpeed * deltaTime;
+
+    FurStrength = glm::clamp(FurStrength, minStrength, maxStrength);
 }
 
 void render(){
@@ -274,6 +309,7 @@ void render(){
         shaderPrograms[0]->set_uniform_value("model", soapModelMatrix);
         shaderPrograms[0]->set_uniform_value("view", view);
         shaderPrograms[0]->set_uniform_value("projection", projection);
+        shaderPrograms[0]->set_uniform_value("ourTexture", 0);
 
         soapModel->draw();
         shaderPrograms[0]->release();
@@ -286,9 +322,118 @@ void render(){
         shaderPrograms[1]->set_uniform_value("view", view);
         shaderPrograms[1]->set_uniform_value("projection", projection);
         shaderPrograms[1]->set_uniform_value("viewPos", camera.position);
+        shaderPrograms[1]->set_uniform_value("ourTexture", 0);
+
         shaderPrograms[1]->set_uniform_value("BubbleAmount", BubbleAmount);
+
         dogModel->draw();
         shaderPrograms[1]->release();
+    }
+
+    if (WaterShow)
+    {
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        shaderPrograms[2]->use();
+        shaderPrograms[2]->set_uniform_value("view", view);
+        shaderPrograms[2]->set_uniform_value("projection", projection);
+        shaderPrograms[2]->set_uniform_value("viewPos", camera.position);
+        shaderPrograms[2]->set_uniform_value("colorFilter", glm::vec3(0.0f, 0.5f, 1.0f)); 
+        
+        float t = currentTime - WaterStartTime;
+        float alphaValue = 1.0f;
+
+        float growRate = 32.0f;
+        int maxBubbles = 32;
+        float currentCount = t * growRate; 
+        int numToDraw = std::min((int)ceil(currentCount), maxBubbles);
+
+        float radius;
+        float posY;
+        float startY = 40.0f;
+        float targetY = -60.0f;
+        float fallSpeed = 40.0f;
+        float tStopStart = (startY - targetY) / fallSpeed;
+        float stopDuration = 4.0f;
+        float tStopEnd = tStopStart + stopDuration;
+
+        if (t < tStopStart) {
+            posY = startY - fallSpeed * t;
+            radius = 120.0f;
+        } else if (t < tStopEnd) {
+            posY = targetY;
+            radius = 120.0f;
+        } else {
+            float tAfterStop = t - tStopEnd;
+            posY = targetY - fallSpeed * tAfterStop;
+            radius = 120.0f - tAfterStop * 20.0f;
+            if (radius < 0.0f) radius = 0.0f;
+
+            alphaValue = glm::clamp(1.0f - tAfterStop / 2.0f, 0.0f, 1.0f);
+        }
+
+        shaderPrograms[2]->set_uniform_value("alpha", alphaValue);
+
+        for (int i = 0; i < numToDraw; i++)
+        {
+            float angle = glm::radians(i * (360.0f / maxBubbles) + t * 50.0f); 
+            float posX = cos(angle) * radius;
+            float posZ = sin(angle) * radius;
+            posY += sin(t * 2.0f + i) * 10.0f;
+
+            float maturity = glm::clamp(currentCount - (float)i, 0.0f, 1.0f);
+
+            glm::mat4 waterModelMatrix = glm::mat4(1.0f);
+            waterModelMatrix = glm::translate(waterModelMatrix, glm::vec3(posX - 30.0f, posY, posZ));
+            
+            float pulse = (0.9f + sin(t * 3.0f + i) * 0.2f) * maturity;
+            waterModelMatrix = glm::scale(waterModelMatrix, glm::vec3(pulse));
+
+            shaderPrograms[2]->set_uniform_value("model", waterModelMatrix);
+            waterModel->draw();
+        }
+        if (t > 5.0f) BubbleShow = false;
+
+        shaderPrograms[2]->release();
+    }
+
+    if (DryerShow)
+    {
+        glm::mat4 dryerModelMatrix = glm::mat4(1.0f);
+
+        float t = currentTime - DryerStartTime;
+        float offsetX = sin(t * 6.0f) * 10.0f;
+        float offsetZ = sin(t * 6.0f) * 5.0f;
+        float rotationY = sin(t * 6.0f) * 2.5f;
+
+        dryerModelMatrix = glm::translate(dryerModelMatrix, glm::vec3(offsetX + 180.0f, 150.0f, offsetZ - 120.0f));
+        dryerModelMatrix = glm::scale(dryerModelMatrix, glm::vec3(20.0f));
+        dryerModelMatrix = glm::rotate(dryerModelMatrix, glm::radians(50.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        dryerModelMatrix = glm::rotate(dryerModelMatrix, glm::radians(30.0f + rotationY), glm::vec3(0.0f, 1.0f, 0.0f));
+
+        shaderPrograms[0]->use();
+        shaderPrograms[0]->set_uniform_value("model", dryerModelMatrix);
+        shaderPrograms[0]->set_uniform_value("view", view);
+        shaderPrograms[0]->set_uniform_value("projection", projection);
+
+        dryerModel->draw();
+        shaderPrograms[0]->release();
+    }
+
+    if (shaderProgramIndex == 3)
+    {
+        float t = currentTime - DryerStartTime;
+        shaderPrograms[3]->use();
+        shaderPrograms[3]->set_uniform_value("model", modelMatrix);
+        shaderPrograms[3]->set_uniform_value("view", view);
+        shaderPrograms[3]->set_uniform_value("projection", projection);
+        shaderPrograms[3]->set_uniform_value("viewPos", camera.position);
+        shaderPrograms[3]->set_uniform_value("ourTexture", 0);
+
+        shaderPrograms[3]->set_uniform_value("Strength", FurStrength);
+        shaderPrograms[3]->set_uniform_value("Length", 0.8f);
+        
+        dogModel->draw();
+        shaderPrograms[3]->release();
     }
 
     cubemapShader->use();
@@ -385,20 +530,37 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
     if (key == GLFW_KEY_1 && action == GLFW_PRESS) 
     {
         shaderProgramIndex = 0; //basic
+
+        SoapShow = false;
         BubbleAmount = 0.0f;
+
+        DryerShow = false;
     }
     if (key == GLFW_KEY_2 && action == GLFW_PRESS) 
     {
         shaderProgramIndex = 1; //bubble
         SoapShow = true;
+        SoapStartTime = glfwGetTime();
         BubbleShow = false;
         BubbleAmount = 0.0f;
-        SoapStartTime = glfwGetTime();
+
+        DryerShow = false;
     }
     if (key == GLFW_KEY_3 && action == GLFW_PRESS)
+    {
         shaderProgramIndex = 2; //water
+        WaterShow = true;
+        WaterStartTime = glfwGetTime();
+    }
     if (key == GLFW_KEY_4 && action == GLFW_PRESS)
+    {
         shaderProgramIndex = 3; //fur
+        DryerShow = true;
+        DryerStartTime = glfwGetTime();
+
+        SoapShow = false;
+        BubbleAmount = 0.0f;
+    }
 }
 
 void framebufferSizeCallback(GLFWwindow *window, int width, int height) {

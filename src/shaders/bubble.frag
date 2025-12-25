@@ -14,16 +14,8 @@ void main()
     vec3 N = normalize(vNormal);
     vec3 V = normalize(viewPos - vWorldPos);
 
-    if (3 * vWorldPos.y +  2 * vWorldPos.x >= -90.0f)
-    {
-        FragColor = texture(ourTexture, TexCoord);
-    }
-    else
-    {
-        float fresnel = pow(1.0 - dot(N, V), 3.0);
-        vec3 bubbleColor = mix(vec3(0.7, 0.85, 1.0), vec3(1.0), fresnel);
+    float fresnel = pow(1.0 - dot(N, V), 3.0);
+    vec3 bubbleColor = mix(vec3(0.7, 0.85, 1.0), vec3(1.0), fresnel);
 
-        FragColor = vec4(bubbleColor, 0.15 + 0.35 * fresnel);
-    }
-    
+    FragColor = vec4(bubbleColor, 0.15 + 0.35 * fresnel);
 } 
