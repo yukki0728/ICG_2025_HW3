@@ -82,7 +82,7 @@ float BubbleGrowSpeed = 0.25f;
 //dryer
 bool DryerShow = false;
 float DryerStartTime = 0.0f;
-float DryerShowTime = 3.5f;
+float DryerShowTime = 5.0f;
 
 //water
 bool WaterShow = false;
@@ -92,9 +92,14 @@ float WaterShowTime = 10.0f;
 //fur
 float FurStrength = 0.0f;
 float minStrength = 0.0f;
-float maxStrength = 10.0f;
+float maxStrength = 12.5f;
 float FurGrowSpeed = 2.5f;
-float FurSmallSpeed = 0.5f;
+float FurSmallSpeed = 1.0f;
+
+//dog jump
+bool DogJump = false;
+float DogJumpStartTime = 0.0f;
+float DogJumpDuration = 1.2f;
 
 void model_setup(){
     dogModel = new Object("..\\..\\src\\asset\\model\\dog.obj");
@@ -273,7 +278,23 @@ void render(){
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glm::mat4 modelMatrix(1.0f);
-    modelMatrix = glm::mat4(1.0f);
+    
+    if (DogJump)
+    {
+        float t = currentTime - DogJumpStartTime;
+        t = glm::clamp(t / DogJumpDuration, 0.0f, 1.0f);
+
+        //跳躍高度（拋物線）
+        float H = sin(t * glm::pi<float>()) * 80.0f;
+
+        //旋轉2圈
+        float Angle = t * 720.0f;
+
+        modelMatrix = glm::translate(modelMatrix, glm::vec3(0.0f, H, 0.0f));
+        modelMatrix = glm::rotate(modelMatrix, glm::radians(Angle), glm::vec3(0.0f, 1.0f, 0.0f));
+
+        if (t == 1.0f) DogJump = false;
+    }
     modelMatrix = glm::rotate(modelMatrix, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
     modelMatrix = glm::scale(modelMatrix, glm::vec3(100.0f));
 
@@ -405,22 +426,47 @@ void render(){
         glm::mat4 dryerModelMatrix = glm::mat4(1.0f);
 
         float t = currentTime - DryerStartTime;
-        float offsetX = sin(t * 6.0f) * 10.0f;
-        float offsetZ = sin(t * 6.0f) * 5.0f;
-        float rotationY = sin(t * 6.0f) * 2.5f;
 
-        dryerModelMatrix = glm::translate(dryerModelMatrix, glm::vec3(offsetX + 180.0f, 150.0f, offsetZ - 120.0f));
-        dryerModelMatrix = glm::scale(dryerModelMatrix, glm::vec3(20.0f));
-        dryerModelMatrix = glm::rotate(dryerModelMatrix, glm::radians(50.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-        dryerModelMatrix = glm::rotate(dryerModelMatrix, glm::radians(30.0f + rotationY), glm::vec3(0.0f, 1.0f, 0.0f));
+        if (t <= 2.5f)
+        {
+            float offsetX = sin(t * 6.0f) * 10.0f;
+            float offsetZ = sin(t * 6.0f) * 5.0f;
+            float rotationY = sin(t * 6.0f) * 2.5f;
 
-        shaderPrograms[0]->use();
-        shaderPrograms[0]->set_uniform_value("model", dryerModelMatrix);
-        shaderPrograms[0]->set_uniform_value("view", view);
-        shaderPrograms[0]->set_uniform_value("projection", projection);
+            dryerModelMatrix = glm::mat4(1.0f);
+            dryerModelMatrix = glm::translate(dryerModelMatrix, glm::vec3(offsetX + 180.0f, 150.0f, offsetZ - 120.0f));
+            dryerModelMatrix = glm::scale(dryerModelMatrix, glm::vec3(20.0f));
+            dryerModelMatrix = glm::rotate(dryerModelMatrix, glm::radians(50.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+            dryerModelMatrix = glm::rotate(dryerModelMatrix, glm::radians(30.0f + rotationY), glm::vec3(0.0f, 1.0f, 0.0f));
+            
+            shaderPrograms[0]->use();
+            shaderPrograms[0]->set_uniform_value("model", dryerModelMatrix);
+            shaderPrograms[0]->set_uniform_value("view", view);
+            shaderPrograms[0]->set_uniform_value("projection", projection);
 
-        dryerModel->draw();
-        shaderPrograms[0]->release();
+            dryerModel->draw();
+            shaderPrograms[0]->release();
+        }
+        else
+        {
+            float offsetX = sin(t * 6.0f) * 10.0f;
+            float offsetZ = sin(t * 6.0f) * 5.0f;
+            float rotationY = sin(t * 6.0f) * 2.5f;
+
+            dryerModelMatrix = glm::mat4(1.0f);
+            dryerModelMatrix = glm::translate(dryerModelMatrix, glm::vec3(offsetX - 20.0f, 210.0f, offsetZ - 150.0f));
+            dryerModelMatrix = glm::scale(dryerModelMatrix, glm::vec3(20.0f));
+            dryerModelMatrix = glm::rotate(dryerModelMatrix, glm::radians(90.0f + rotationY), glm::vec3(0.0f, 1.0f, 0.0f));
+            dryerModelMatrix = glm::rotate(dryerModelMatrix, glm::radians(60.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+            
+            shaderPrograms[0]->use();
+            shaderPrograms[0]->set_uniform_value("model", dryerModelMatrix);
+            shaderPrograms[0]->set_uniform_value("view", view);
+            shaderPrograms[0]->set_uniform_value("projection", projection);
+
+            dryerModel->draw();
+            shaderPrograms[0]->release();
+        }
     }
 
     if (shaderProgramIndex == 3)
@@ -538,7 +584,10 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
         SoapShow = false;
         BubbleAmount = 0.0f;
 
+        BubbleShow = false;
+        WaterShow = false;
         DryerShow = false;
+        DogJump = false;
     }
     if (key == GLFW_KEY_2 && action == GLFW_PRESS) 
     {
@@ -548,13 +597,19 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
         BubbleShow = false;
         BubbleAmount = 0.0f;
 
+        WaterShow = false;
         DryerShow = false;
+        DogJump = false;
     }
     if (key == GLFW_KEY_3 && action == GLFW_PRESS)
     {
         shaderProgramIndex = 2; //water
         WaterShow = true;
         WaterStartTime = glfwGetTime();
+
+        SoapShow = false;
+        DryerShow = false;
+        DogJump = false;
     }
     if (key == GLFW_KEY_4 && action == GLFW_PRESS)
     {
@@ -564,6 +619,19 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
 
         SoapShow = false;
         BubbleAmount = 0.0f;
+
+        WaterShow = false;
+        DogJump = false;
+    }
+    if (key == GLFW_KEY_5 && action == GLFW_PRESS)
+    {
+        DogJump = true;
+        DogJumpStartTime = glfwGetTime();
+
+        SoapShow = false;
+        BubbleShow = false;
+        WaterShow = false;
+        DryerShow = false;
     }
 }
 
