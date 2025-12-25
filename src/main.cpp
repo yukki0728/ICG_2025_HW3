@@ -284,7 +284,7 @@ void render(){
         float t = currentTime - DogJumpStartTime;
         t = glm::clamp(t / DogJumpDuration, 0.0f, 1.0f);
 
-        //跳躍高度（拋物線）
+        //跳躍高度
         float H = sin(t * glm::pi<float>()) * 80.0f;
 
         //旋轉2圈
